@@ -19,7 +19,7 @@
 
 ----------------------------------------------------------------------------------------------------
 -- This is a single-ported RAM module with the following properties:
---   * Wishbone interface.
+--   * Wishbone B4 pipelined interface.
 --   * Configurable size (2^N words).
 --   * 32-bit data width.
 --   * Byte enable / select for write operations.
@@ -36,22 +36,22 @@ entity wb_ram is
     ADDR_BITS : positive := 10  -- 4 KiB (4096 bytes)
   );
   port(
-      -- Control signals.
-      i_clk : in std_logic;
-      i_rst : in std_logic;
+    -- Control signals.
+    i_clk : in std_logic;
+    i_rst : in std_logic;
 
-      -- Memory interface (Wishbone slave).
-      -- See: https://cdn.opencores.org/downloads/wbspec_b4.pdf
-      i_wb_adr : in std_logic_vector(ADDR_BITS+1 downto 2);
-      i_wb_dat : in std_logic_vector(31 downto 0);
-      i_wb_we : in std_logic;
-      i_wb_sel : in std_logic_vector(32/8-1 downto 0);
-      i_wb_cyc : in std_logic;
-      i_wb_stb : in std_logic;
-      o_wb_dat : out std_logic_vector(31 downto 0);
-      o_wb_ack : out std_logic;
-      o_wb_stall : out std_logic
-    );
+    -- Memory interface (Wishbone slave).
+    -- See: https://cdn.opencores.org/downloads/wbspec_b4.pdf
+    i_wb_adr : in std_logic_vector(ADDR_BITS+1 downto 2);
+    i_wb_dat : in std_logic_vector(31 downto 0);
+    i_wb_we : in std_logic;
+    i_wb_sel : in std_logic_vector(32/8-1 downto 0);
+    i_wb_cyc : in std_logic;
+    i_wb_stb : in std_logic;
+    o_wb_dat : out std_logic_vector(31 downto 0);
+    o_wb_ack : out std_logic;
+    o_wb_stall : out std_logic
+  );
 end wb_ram;
 
 architecture rtl of wb_ram is
@@ -97,7 +97,7 @@ begin
       o_wb_dat(31 downto 24) <= s_byte_array_3(v_ram_addr);
 
       -- Ack that we have dealt with the request.
-      o_wb_ack <= v_is_valid_request;
+      o_wb_ack <= (not i_rst) and v_is_valid_request;
     end if;
   end process;
 
