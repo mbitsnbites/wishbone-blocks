@@ -33,7 +33,7 @@ use ieee.numeric_std.all;
 
 entity wb_ram is
   generic(
-    ADDR_BITS : positive := 10  -- 4 KiB (4096 bytes)
+    ADR_BITS : positive := 10  -- 2**10 = 1024 words
   );
   port(
     -- Control signals.
@@ -42,7 +42,7 @@ entity wb_ram is
 
     -- Memory interface (Wishbone slave).
     -- See: https://cdn.opencores.org/downloads/wbspec_b4.pdf
-    i_wb_adr : in std_logic_vector(ADDR_BITS-1 downto 0);
+    i_wb_adr : in std_logic_vector(ADR_BITS-1 downto 0);
     i_wb_dat : in std_logic_vector(31 downto 0);
     i_wb_we : in std_logic;
     i_wb_sel : in std_logic_vector(32/8-1 downto 0);
@@ -55,7 +55,7 @@ entity wb_ram is
 end wb_ram;
 
 architecture rtl of wb_ram is
-  constant C_NUM_WORDS : positive := 2**ADDR_BITS;
+  constant C_NUM_WORDS : positive := 2**ADR_BITS;
 
   type T_BYTE_ARRAY is array (0 to C_NUM_WORDS-1) of std_logic_vector(7 downto 0);
   signal s_byte_array_0 : T_BYTE_ARRAY;
@@ -64,7 +64,7 @@ architecture rtl of wb_ram is
   signal s_byte_array_3 : T_BYTE_ARRAY;
 begin
   process(i_clk)
-    variable v_ram_addr : integer range 0 to C_NUM_WORDS-1;
+    variable v_adr : integer range 0 to C_NUM_WORDS-1;
     variable v_is_valid_request : std_logic;
   begin
     if rising_edge(i_clk) then
@@ -72,29 +72,29 @@ begin
       v_is_valid_request := (not i_rst) and i_wb_cyc and i_wb_stb;
 
       -- Get the address.
-      v_ram_addr := to_integer(unsigned(i_wb_adr));
+      v_adr := to_integer(unsigned(i_wb_adr));
 
       -- Write?
       if v_is_valid_request = '1' and i_wb_we = '1' then
         if i_wb_sel(0) = '1' then
-          s_byte_array_0(v_ram_addr) <= i_wb_dat(7 downto 0);
+          s_byte_array_0(v_adr) <= i_wb_dat(7 downto 0);
         end if;
         if i_wb_sel(1) = '1' then
-          s_byte_array_1(v_ram_addr) <= i_wb_dat(15 downto 8);
+          s_byte_array_1(v_adr) <= i_wb_dat(15 downto 8);
         end if;
         if i_wb_sel(2) = '1' then
-          s_byte_array_2(v_ram_addr) <= i_wb_dat(23 downto 16);
+          s_byte_array_2(v_adr) <= i_wb_dat(23 downto 16);
         end if;
         if i_wb_sel(3) = '1' then
-          s_byte_array_3(v_ram_addr) <= i_wb_dat(31 downto 24);
+          s_byte_array_3(v_adr) <= i_wb_dat(31 downto 24);
         end if;
       end if;
 
       -- We always read.
-      o_wb_dat(7 downto 0) <= s_byte_array_0(v_ram_addr);
-      o_wb_dat(15 downto 8) <= s_byte_array_1(v_ram_addr);
-      o_wb_dat(23 downto 16) <= s_byte_array_2(v_ram_addr);
-      o_wb_dat(31 downto 24) <= s_byte_array_3(v_ram_addr);
+      o_wb_dat(7 downto 0) <= s_byte_array_0(v_adr);
+      o_wb_dat(15 downto 8) <= s_byte_array_1(v_adr);
+      o_wb_dat(23 downto 16) <= s_byte_array_2(v_adr);
+      o_wb_dat(31 downto 24) <= s_byte_array_3(v_adr);
 
       -- Ack that we have dealt with the request.
       o_wb_ack <= v_is_valid_request;
