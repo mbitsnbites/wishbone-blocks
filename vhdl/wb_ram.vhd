@@ -68,8 +68,8 @@ begin
     variable v_is_valid_request : std_logic;
   begin
     if rising_edge(i_clk) then
-      -- Is this us?
-      v_is_valid_request := i_wb_cyc and i_wb_stb;
+      -- Is this a valid request for this Wishbone slave?
+      v_is_valid_request := (not i_rst) and i_wb_cyc and i_wb_stb;
 
       -- Get the address.
       v_ram_addr := to_integer(unsigned(i_wb_adr));
@@ -97,7 +97,7 @@ begin
       o_wb_dat(31 downto 24) <= s_byte_array_3(v_ram_addr);
 
       -- Ack that we have dealt with the request.
-      o_wb_ack <= (not i_rst) and v_is_valid_request;
+      o_wb_ack <= v_is_valid_request;
     end if;
   end process;
 
