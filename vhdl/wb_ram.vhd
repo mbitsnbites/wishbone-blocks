@@ -42,7 +42,7 @@ entity wb_ram is
 
     -- Memory interface (Wishbone slave).
     -- See: https://cdn.opencores.org/downloads/wbspec_b4.pdf
-    i_wb_adr : in std_logic_vector(ADDR_BITS+1 downto 2);
+    i_wb_adr : in std_logic_vector(ADDR_BITS-1 downto 0);
     i_wb_dat : in std_logic_vector(31 downto 0);
     i_wb_we : in std_logic;
     i_wb_sel : in std_logic_vector(32/8-1 downto 0);
