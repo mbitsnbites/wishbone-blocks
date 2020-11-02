@@ -19,12 +19,13 @@
 
 ----------------------------------------------------------------------------------------------------
 -- This is a single-ported RAM module with the following properties:
---   * Wishbone B4 pipelined interface.
---   * Configurable size (2^N words).
---   * 32-bit data width.
+--   * Wishbone B4 pipelined interface (see: https://cdn.opencores.org/downloads/wbspec_b4.pdf)
+--   * Configurable size.
+--   * Configurable data width.
+--   * Configurable word granularity (for the SEL signal).
 --   * Byte enable / select for write operations.
 --   * Single cycle read/write operation.
---   * Synthesizes to BRAM (tested on Intel Arria II, Cyclone IV, Cyclone V, Cyclone 10, MAX 10).
+--   * Synthesizes to BRAM.
 ----------------------------------------------------------------------------------------------------
 
 library ieee;
@@ -33,74 +34,74 @@ use ieee.numeric_std.all;
 
 entity wb_ram is
   generic(
-    ADR_BITS : positive := 10  -- 2**10 = 1024 words
+    ADR_WIDTH : positive := 10;  -- Determines the size of the RAM (num. of words = 2**ADR_WIDTH)
+    DAT_WIDTH : positive := 32;  -- Must be a multiple of GRANULARITY
+    GRANULARITY : positive := 8  -- Usually 8 (for byte granularity)
   );
   port(
-    -- Control signals.
-    i_clk : in std_logic;
+    -- Wishbone SLAVE signals.
     i_rst : in std_logic;
-
-    -- Memory interface (Wishbone slave).
-    -- See: https://cdn.opencores.org/downloads/wbspec_b4.pdf
-    i_wb_adr : in std_logic_vector(ADR_BITS-1 downto 0);
-    i_wb_dat : in std_logic_vector(31 downto 0);
-    i_wb_we : in std_logic;
-    i_wb_sel : in std_logic_vector(32/8-1 downto 0);
-    i_wb_cyc : in std_logic;
-    i_wb_stb : in std_logic;
-    o_wb_dat : out std_logic_vector(31 downto 0);
-    o_wb_ack : out std_logic;
-    o_wb_stall : out std_logic
+    i_clk : in std_logic;
+    i_adr : in std_logic_vector(ADR_WIDTH-1 downto 0);
+    i_dat : in std_logic_vector(DAT_WIDTH-1 downto 0);
+    i_we : in std_logic;
+    i_sel : in std_logic_vector(DAT_WIDTH/GRANULARITY-1 downto 0);
+    i_cyc : in std_logic;
+    i_stb : in std_logic;
+    o_dat : out std_logic_vector(DAT_WIDTH-1 downto 0);
+    o_ack : out std_logic;
+    o_stall : out std_logic;
+    o_rty : out std_logic;
+    o_err : out std_logic
   );
 end wb_ram;
 
 architecture rtl of wb_ram is
-  constant C_NUM_WORDS : positive := 2**ADR_BITS;
+  constant C_NUM_WORDS : positive := 2**ADR_WIDTH;
+  constant C_PARTS_PER_WORD : positive := DAT_WIDTH / GRANULARITY;
 
-  type T_BYTE_ARRAY is array (0 to C_NUM_WORDS-1) of std_logic_vector(7 downto 0);
-  signal s_byte_array_0 : T_BYTE_ARRAY;
-  signal s_byte_array_1 : T_BYTE_ARRAY;
-  signal s_byte_array_2 : T_BYTE_ARRAY;
-  signal s_byte_array_3 : T_BYTE_ARRAY;
+  subtype T_PART is std_logic_vector(GRANULARITY-1 downto 0);
+  type T_PART_ARRAY is array (0 to C_NUM_WORDS-1) of T_PART;
+  type T_MEM is array (0 to C_PARTS_PER_WORD-1) of T_PART_ARRAY;
+
+  signal s_mem : T_MEM;
 begin
-  process(i_clk)
+  process(i_rst, i_clk)
     variable v_adr : integer range 0 to C_NUM_WORDS-1;
-    variable v_is_valid_request : std_logic;
+    variable v_req : std_logic;
   begin
-    if rising_edge(i_clk) then
+    if i_rst = '1' then
+      o_dat <= (others => '0');
+      o_ack <= '0';
+    elsif rising_edge(i_clk) then
       -- Is this a valid request for this Wishbone slave?
-      v_is_valid_request := (not i_rst) and i_wb_cyc and i_wb_stb;
+      v_req := i_cyc and i_stb;
 
       -- Get the address.
-      v_adr := to_integer(unsigned(i_wb_adr));
+      v_adr := to_integer(unsigned(i_adr));
 
       -- Write?
-      if v_is_valid_request = '1' and i_wb_we = '1' then
-        if i_wb_sel(0) = '1' then
-          s_byte_array_0(v_adr) <= i_wb_dat(7 downto 0);
-        end if;
-        if i_wb_sel(1) = '1' then
-          s_byte_array_1(v_adr) <= i_wb_dat(15 downto 8);
-        end if;
-        if i_wb_sel(2) = '1' then
-          s_byte_array_2(v_adr) <= i_wb_dat(23 downto 16);
-        end if;
-        if i_wb_sel(3) = '1' then
-          s_byte_array_3(v_adr) <= i_wb_dat(31 downto 24);
-        end if;
+      if v_req = '1' and i_we = '1' then
+        for k in 0 to C_PARTS_PER_WORD-1 loop
+          if i_sel(k) = '1' then
+            s_mem(k)(v_adr) <= i_dat(GRANULARITY*(k+1)-1 downto GRANULARITY*k);
+          end if;
+        end loop;
       end if;
 
       -- We always read.
-      o_wb_dat(7 downto 0) <= s_byte_array_0(v_adr);
-      o_wb_dat(15 downto 8) <= s_byte_array_1(v_adr);
-      o_wb_dat(23 downto 16) <= s_byte_array_2(v_adr);
-      o_wb_dat(31 downto 24) <= s_byte_array_3(v_adr);
+      for k in 0 to C_PARTS_PER_WORD-1 loop
+        o_dat(GRANULARITY*(k+1)-1 downto GRANULARITY*k) <= s_mem(k)(v_adr);
+      end loop;
 
       -- Ack that we have dealt with the request.
-      o_wb_ack <= v_is_valid_request;
+      o_ack <= v_req;
     end if;
   end process;
 
-  -- We never stall - we're that fast ;-)
-  o_wb_stall <= '0';
+  -- Note: STALL, RTY and ERR are always deasserted, as we respond in one clock cycle and there is
+  -- no risk of any errors.
+  o_stall <= '0';
+  o_rty <= '0';
+  o_err <= '0';
 end rtl;
