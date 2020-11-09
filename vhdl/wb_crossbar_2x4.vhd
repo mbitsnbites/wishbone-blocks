@@ -337,8 +337,8 @@ begin
   -- Can we honor the request from master B?
   -- TODO(m): Can we optimize the collision detection logic (s_next_port_a is expensive)?
   s_req_validated_b <= (s_req_b and not s_pending_reqs_is_max_b) when
-      s_req_port_b = s_active_port_b or
-      (s_no_pending_req_b = '1' and s_req_port_b /= s_next_port_a)
+      s_req_port_b /= s_next_port_a and
+      (s_req_port_b = s_active_port_b or s_no_pending_req_b = '1')
       else '0';
 
   -- Determine the next slave port for master B.
