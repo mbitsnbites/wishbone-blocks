@@ -1,3 +1,5 @@
+## This repo has moved to: https://gitlab.com/mbitsnbites/wishbone-blocks
+
 # Wishbone Blocks
 
 This is a collection of Wishbone building blocks.
